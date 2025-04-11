@@ -1,5 +1,4 @@
 import os
-import re
 import random
 from itertools import repeat
 from typing import Callable
@@ -16,8 +15,6 @@ import numpy as np
 from rdkit.Chem import AllChem
 from rdkit.Chem.rdchem import Mol
 from rdkit.Avalon import pyAvalonTools
-from unimol_tools import UniMolRepr
-from deepchem.feat.smiles_tokenizer import SmilesTokenizer
 from ogb.utils.mol import smiles2graph
 from transformers import RobertaTokenizerFast
 
@@ -63,7 +60,6 @@ def dfs_torch_geometric(edge_index, start_node=0):
                         if neighbor not in visited:
                             stack.append(neighbor)
     return order
-
 
 def bfs_torch_geometric(edge_index, start_node=0):
     """Breadth First Search"""
@@ -113,7 +109,6 @@ def getmorganfingerprint(mol: Mol):
     """
     return list(AllChem.GetMorganFingerprintAsBitVect(mol, 2, nBits=FINGERPRINT_SIZE))
 
-
 def getmaccsfingerprint(mol: Mol):
     """Get the MACCS fingerprint.
 
@@ -137,6 +132,9 @@ class PygOurDataset(InMemoryDataset):
         smiles2graph: Callable = smiles2graph,
         transform=None,
         pre_transform=None,
+        smiles_col = 'smiles',
+        max_len=100,
+        AddRandomWalkPE_walk_length=5
     ):
         """
         Args:
@@ -146,7 +144,7 @@ class PygOurDataset(InMemoryDataset):
             smiles2graph (Callable, optional): Generate the molecular graph from the SMILES
                 string. Defaults to smiles2graph.
         """
-
+        self.smiles_col = smiles_col
         self.original_root = root
         self.smiles2graph = smiles2graph
         self.folder = os.path.join(root, dataname)
@@ -154,13 +152,12 @@ class PygOurDataset(InMemoryDataset):
         self.dataname = dataname
         self.phase = phase
         self.aug = "none"
+        self.max_len=max_len
         self.tokenizer = RobertaTokenizerFast.from_pretrained(
-            "seyonec/ChemBERTa_zinc250k_v2_40k", max_len=100
+            "seyonec/ChemBERTa_zinc250k_v2_40k", max_len=self.max_len
         )
-
-        self.tokenizer_simple = SmilesTokenizer('utils/vocab.txt')
-        self.transform_pe = AddRandomWalkPE(walk_length=5) 
-        self.geom3d = UniMolRepr(data_type='molecule')
+        
+        self.transform_pe = AddRandomWalkPE(walk_length=AddRandomWalkPE_walk_length) 
         super(PygOurDataset, self).__init__(self.folder, transform, pre_transform)
 
         self.data, self.slices = torch.load(self.processed_paths[0])
@@ -179,16 +176,10 @@ class PygOurDataset(InMemoryDataset):
         data_df = pd.read_csv(
             os.path.join(self.raw_dir, self.phase + "_" + self.dataname + ".csv")
         )
-        smiles_list = data_df["smiles"]
-        homolumogap_list = data_df[data_df.columns.difference(["smiles", "mol_id", "num", "name"])]
-
-        max_len = 100
-        tokenized_smiles = [self.tokenizer_simple.encode(smiles) for smiles in smiles_list]
-        truncated_padded_sequences = [
-                seq[:max_len] + [0] * (max_len - len(seq))
-                if len(seq) < max_len else seq[:max_len]
-                for seq in tokenized_smiles
-        ]
+        print(data_df.keys())
+        print(os.path.join(self.raw_dir, self.phase + "_" + self.dataname + ".csv"))
+        smiles_list = data_df[self.smiles_col]#["smiles"]mol
+        homolumogap_list = data_df[data_df.columns.difference([self.smiles_col, "mol_id", "num", "name"])]
 
         encodings = self.tokenizer(smiles_list.tolist(), truncation=True, padding=True)
 
@@ -200,6 +191,8 @@ class PygOurDataset(InMemoryDataset):
 
             smiles = smiles_list[i]
             homolumogap = homolumogap_list.iloc[i]
+            homolumogap = pd.to_numeric(homolumogap, errors='coerce')
+
             graph = self.smiles2graph(smiles)
 
             sorted_order_b = bfs_torch_geometric(graph['edge_index'])
@@ -249,14 +242,13 @@ class PygOurDataset(InMemoryDataset):
             
             if len(fg_features) == 0:
                 fg_features = [[0] * 12]
-            
+                
             data.edge_index = torch.Tensor(graph["edge_index"]).to(torch.int64)
             data.edge_attr = torch.Tensor(bond_features).to(torch.int64)
             data.x = torch.Tensor(atom_features).to(torch.int64)
-            data.y = torch.Tensor([homolumogap])
+            data.y = torch.Tensor([homolumogap.values])
             data.input_ids = torch.Tensor(encodings.input_ids[i])
             data.attention_mask = torch.Tensor(encodings.attention_mask[i])
-            data.token_ids = torch.Tensor(truncated_padded_sequences[i])
             data.sorted_order_b = torch.Tensor(sorted_order_b).to(torch.int64)
             data.sorted_order_d = torch.Tensor(sorted_order_d).to(torch.int64)
             data.sorted_order_b_fg = torch.Tensor(sorted_order_b_fg).to(torch.int64)
@@ -270,7 +262,6 @@ class PygOurDataset(InMemoryDataset):
             data.maccs = torch.tensor(maccs)
             data.avalon = torch.tensor(avalon)
             data.smiles = smiles
-            #data.geom3d_feature = torch.tensor(unimol_feature[smiles])#torch.tensor(self.geom3d.get_repr(smiles)).squeeze()[0]
             data_list.append(data)
 
         data_list = [self.transform_pe(data) for data in data_list]
@@ -290,7 +281,7 @@ class PygOurDataset(InMemoryDataset):
         data = Data()
         for key in self.data.keys():
             item, slices = self.data[key], self.slices[key]
-            if key=='smiles':
+            if key==self.smiles_col:
                     data[key] = item[idx]
             else:
                     s = list(repeat(slice(None), item.dim()))

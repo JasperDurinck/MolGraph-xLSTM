@@ -18,7 +18,6 @@ import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
 from torch.optim import Optimizer
 from torch_geometric.data import DataLoader, Data
-import tensorboard_logger as tb_logger
 
 from utils.parsing import parse_option
 from utils.evaluate import Evaluator
@@ -29,7 +28,6 @@ from loss.loss_scl_reg import SupConLossReg
 from models.deepgcn import GraphxLSTM
 from models.module import MLP, MLPMoE
 
-import pdb
 warnings.filterwarnings("ignore")
 
 def set_seed(num_seed):
@@ -54,9 +52,9 @@ def set_loader(opt: Any, dataname: str) -> Set[Data]:
         Set[Data]: train/validation/test sets.
     """
 
-    train_dataset = PygOurDataset(root=opt.data_dir, phase="train", dataname=dataname)
-    test_dataset = PygOurDataset(root=opt.data_dir, phase="test", dataname=dataname)
-    val_dataset = PygOurDataset(root=opt.data_dir, phase="valid", dataname=dataname)
+    train_dataset = PygOurDataset(root=opt.data_dir, phase="train", dataname=dataname, max_len=100)
+    test_dataset = PygOurDataset(root=opt.data_dir, phase="test", dataname=dataname, max_len=100)
+    val_dataset = PygOurDataset(root=opt.data_dir, phase="valid", dataname=dataname, max_len=100)
 
     return train_dataset, test_dataset, val_dataset
 
@@ -302,7 +300,6 @@ def train(
         end = time.time()
     return losses_task.avg, losses_scl.avg, losses.avg
 
-
 def validation(
     dataset: Set[Data],
     model: torch.nn.Sequential,
@@ -382,7 +379,6 @@ def validation(
 
     return y_true, y_pred, eval_result
 
-
 def main():
 
     for dataname in [opt.dataset + "_3", opt.dataset + "_1", opt.dataset + "_2"]:
@@ -414,9 +410,6 @@ def main():
 
         with open(opt.save_folder + "//runtime_params.json", "w") as f:
                 json.dump(args_dict, f, indent=4)
-
-        # tensorboard
-        logger = tb_logger.Logger(logdir=opt.tb_folder, flush_secs=2)
 
         if opt.classification:
             best_acc = 0
@@ -454,12 +447,12 @@ def main():
 
             _, _, acc = validation(val_dataset, model, opt, mu, std, 0, epoch)
 
-            # tensorboard logger
-            logger.log_value("task loss", loss_task, epoch)
-            logger.log_value("supervised contrastive loss", loss_scl, epoch)
-            logger.log_value("overall loss", loss, epoch)
-            logger.log_value("validation auroc/rmse", acc, epoch)
-            logger.log_value("learning rate", optimizer[0].state_dict()['param_groups'][0]['lr'], epoch)
+            # # tensorboard logger
+            # logger.log_value("task loss", loss_task, epoch)
+            # logger.log_value("supervised contrastive loss", loss_scl, epoch)
+            # logger.log_value("overall loss", loss, epoch)
+            # logger.log_value("validation auroc/rmse", acc, epoch)
+            # logger.log_value("learning rate", optimizer[0].state_dict()['param_groups'][0]['lr'], epoch)
 
             if opt.classification:
                 if acc > best_acc:
@@ -467,7 +460,7 @@ def main():
                     best_model = deepcopy(model).cpu()
                     best_epoch = epoch
                     _, _, test_acc = validation(test_dataset, model, opt, mu, std, 0, epoch)
-                    logger.log_value("test auroc", test_acc, epoch)
+                    #logger.log_value("test auroc", test_acc, epoch)
                     print("test auroc:{}".format(test_acc))
                 print("val auroc:{}".format(acc))
                 
@@ -477,7 +470,7 @@ def main():
                     best_model = deepcopy(model).cpu()
                     best_epoch = epoch
                     _, _, test_acc = validation(test_dataset, model, opt, mu, std, 0, epoch)
-                    logger.log_value("test rmse", test_acc, epoch)
+                    #logger.log_value("test rmse", test_acc, epoch)
                     print("test rmse:{}".format(test_acc))
                 print("val rmse:{}".format(acc))
 
