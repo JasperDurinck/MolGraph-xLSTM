@@ -5,7 +5,7 @@ from torch_geometric.nn import MessagePassing
 from torch_scatter import scatter, scatter_softmax
 from torch_geometric.utils import degree
 
-from models.deepgcn_nn import MLP, BondEncoder
+from .deepgcn_nn import MLP, BondEncoder
 import pdb
 
 class GenMessagePassing(MessagePassing):

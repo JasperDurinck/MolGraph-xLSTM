@@ -16,9 +16,9 @@ from xlstm import (
         FeedForwardConfig,
     )
 
-from models.deepgcn_vertex import GENConv
-from models.deepgcn_nn import MLP, norm_layer
-from utils.chem_utils import AtomEncoder, BondEncoder, FGEncoder
+from .deepgcn_vertex import GENConv
+from .deepgcn_nn import MLP, norm_layer
+from ..utils.chem_utils import AtomEncoder, BondEncoder, FGEncoder
 
 class xLSTMModule(torch.nn.Module):
     def __init__(self, num_blocks: int, embedding_dim: int, slstm: List[int], proj_factor: int = 2, act_fn: str = "relu"):
@@ -159,51 +159,51 @@ class DeeperGCN(torch.nn.Module):
         return h_graph, h_init
 
 class GraphxLSTM(torch.nn.Module):
-    def __init__(self, opt: Any):
+    def __init__(self, args):
         super().__init__()
 
-        self.classification = opt.classification
+        self.classification = args['classification']
 
         #GCN
-        num_gc_layers = opt.num_gc_layers
+        num_gc_layers = args['num_gc_layers']
         dropout = 0.2
         aggr = "add"
-        mlp_layers = opt.mlp_layers
+        mlp_layers = args['mlp_layers']
 
         self.atom_graph_gnn = DeeperGCN(
             num_gc_layers,
             dropout,
             aggr,
             mlp_layers = mlp_layers,
-            power = opt.power,
-            dims = opt.num_dim,
+            power = args['power'],
+            dims = args['num_dim'],
         )
 
         #xLSTM
-        if opt.classification:
+        if args['classification']:
             act_fn = 'relu'
         else:
             act_fn = 'gelu'
 
         self.atom_lstm = xLSTMModule(
-            num_blocks = opt.num_blocks,
-            embedding_dim = opt.power * opt.num_dim,
-            slstm = opt.slstm,
+            num_blocks = args['num_blocks'],
+            embedding_dim = args['power'] * args['num_dim'],
+            slstm = args['slstm'],
             act_fn = act_fn
         )
 
         self.fg_lstm = xLSTMModule(
-            num_blocks=opt.num_blocks,
-            embedding_dim=opt.power * opt.num_dim,
-            slstm=opt.slstm,
+            num_blocks=args['num_blocks'],
+            embedding_dim=args['power'] * args['num_dim'],
+            slstm=args['slstm'],
             act_fn = act_fn
         )
 
-        self.fg_encoder = FGEncoder(emb_dim = opt.power * opt.num_dim)
+        self.fg_encoder = FGEncoder(emb_dim = args['power'] * args['num_dim'])
 
-        self.reg = torch.nn.Linear(opt.power * opt.num_dim, opt.power * opt.num_dim)
-        self.cls = torch.nn.Linear(opt.power * opt.num_dim * 2, opt.power * opt.num_dim)
-        self.set2set = Set2Set(opt.power * opt.num_dim, processing_steps=3)
+        self.reg = torch.nn.Linear(args['power'] * args['num_dim'], args['power'] * args['num_dim'])
+        self.cls = torch.nn.Linear(args['power'] * args['num_dim'] * 2, args['power'] * args['num_dim'])
+        self.set2set = Set2Set(args['power'] * args['num_dim'], processing_steps=3)
 
     def forward(self, batch: Tensor):
         #GCN

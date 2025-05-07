@@ -87,7 +87,7 @@ def set_optimizer(lr: float, weight_decay: float, model: nn.Sequential):
     return optimizer
 
 
-def calmean(dataset: Set[Data]):
+def calmean(labels: Set[Data]):
     """Calculate the mean value and the standard deviation value for a regression task.
 
     Args:
@@ -97,9 +97,6 @@ def calmean(dataset: Set[Data]):
         The mean value and the standard deviation value of the dataset.
     """
     block_size = 1000
-    labels = []
-    for i in range(len(dataset)):
-        labels.append(dataset[i].y)
 
     labels_tensor = torch.Tensor(labels).to("cuda")
     mm = torch.mean(labels_tensor)

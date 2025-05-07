@@ -1,6 +1,6 @@
 import torch
-from models.mixture_of_experts import MoE
-from models.mhmoe import MultiHeadMoeBlock
+from .mixture_of_experts import MoE
+from .mhmoe import MultiHeadMoeBlock
 
 class MLP(torch.nn.Module):
     def __init__(self, input_feat, dim_feat, num_tasks, num_layers=3, dropout=0.5, activation=torch.nn.ReLU()):

@@ -85,6 +85,6 @@ This project is licensed under the MIT License.
    The original code assumes the dataset includes a `'smiles'` column, but some datasets (e.g., BRACE)  
    use different column names like `'mol'` (cause of error in original code). This fork allows the user to specify the correct column name and also adjust max_len. #TODO improve further with respect to args  
 
-5. **Creating a modular version and working on making it an installable package (#TODO)**  
-   Improve modularity for easier integration into custom pipelines.
+5. **Refactored code, created a more modular installable package**  
+   For simpler integration into custom pipelines.
    
